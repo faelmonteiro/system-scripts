@@ -48,8 +48,11 @@ printf '\033[2J\033[H'
 }
 
 pause_menu() {
-echo
-read -r -p "Pressione ENTER para voltar ao menu..." || return
+    echo
+    printf '%s\n' "  ${GRAY}─────────────────────────────────────────────────────${NC}"
+    printf '%s\n' "  ${GREEN}${BOLD}${ICON_OK} Processo finalizado!${NC}"
+    echo
+    read -r -p "  Pressione [ENTER] para voltar ao menu..." || return
 }
 
 root_action() {

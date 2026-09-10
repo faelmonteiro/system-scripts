@@ -102,8 +102,17 @@ warn()  { printf '%s\n' "${YELLOW}[AVISO]${NC} $*"; }
 err()   { printf '%s\n' "${RED}[ERRO]${NC} $*" >&2; }
 
 pause() {
+    local exit_code="${1:-0}"
     echo
-    read -rp "Pressione ENTER para continuar..." _
+    printf '%s\n' "  ${GRAY}─────────────────────────────────────────────────────${NC}"
+    if [[ "$exit_code" -eq 0 ]]; then
+        printf '%s\n' "  ${GREEN}${BOLD}${ICON_OK} Processo finalizado com sucesso!${NC}"
+    else
+        printf '%s\n' "  ${YELLOW}${BOLD}${ICON_WARN} Processo finalizado com avisos ou alertas.${NC}"
+    fi
+    echo
+    printf '  %s' "${CYAN}Pressione ${BOLD}[ENTER]${NC}${CYAN} para voltar ao menu principal...${NC}"
+    read -rp "" _
 }
 
 require_root() {
@@ -842,18 +851,22 @@ interactive_menu() {
         read -rp "  Escolha uma opção: " choice
 
         case "$choice" in
-            1) activate_stealth; pause ;;
-            2) deactivate_stealth; pause ;;
-            3) rotate_server; pause ;;
-            4) show_status; pause ;;
-            5) do_login; pause ;;
+            1) activate_stealth; pause $? ;;
+            2) deactivate_stealth; pause $? ;;
+            3) rotate_server; pause $? ;;
+            4) show_status; pause $? ;;
+            5) do_login; pause $? ;;
             0)
                 echo
                 printf '  %s\n' "${DIM}Até mais! ${ICON_SHIELD}${NC}"
                 echo
                 exit 0
                 ;;
-            *) ;;
+            *)
+                echo
+                warn "Opção inválida: '$choice'"
+                pause 1
+                ;;
         esac
     done
 }

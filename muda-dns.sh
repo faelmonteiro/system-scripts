@@ -88,7 +88,10 @@ trap cleanup INT TERM
 # Pausa
 pause() {
     echo
-    read -rp "Pressione Enter para continuar..." _
+    echo "${BOLD}${CYAN}────────────────────────────────────────────${RESET}"
+    echo "${GREEN}${BOLD}✔ Processo concluído com sucesso!${RESET}"
+    echo
+    read -rp "Pressione [ENTER] para voltar ao menu..." _
 }
 
 # Função para aplicar servidores no dnscrypt-proxy.toml
