@@ -4,7 +4,8 @@
 # Ferramenta de randomização de identificadores do sistema Linux.
 # =============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_SOURCE="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
 MODULES_DIR="$SCRIPT_DIR/modules"
 
 # Carregamento sequencial dos submódulos

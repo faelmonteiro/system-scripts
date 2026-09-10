@@ -70,7 +70,8 @@ declare -A COUNTRY_NAMES=(
 )
 
 RESOLV_FILE="/etc/resolv.conf"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_SOURCE="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
 MUDA_DNS_SCRIPT="/usr/local/bin/muda-dns.sh"
 if [[ ! -x "$MUDA_DNS_SCRIPT" && -x "$SCRIPT_DIR/muda-dns.sh" ]]; then
     MUDA_DNS_SCRIPT="$SCRIPT_DIR/muda-dns.sh"
