@@ -12,7 +12,7 @@
 #   ./stealth-mode.sh login    (faz login / troca de conta)
 #   ./stealth-mode.sh logout   (sai da conta)
 #
-VERSION="1.2.1"
+VERSION="1.2.2"
 set -o pipefail
 set -u
 ORIG_ARGS=("$@")
@@ -132,16 +132,53 @@ rand_u32() {
     echo "${n:-$RANDOM}"
 }
 
-# Executa o protonvpn no contexto do usuário real (com suporte a D-Bus e chaveiro)
+# Identifica o usuário real (mesmo sob sudo ou subshell)
+get_real_user() {
+    local u="${SUDO_USER:-}"
+    if [[ -z "$u" || "$u" == "root" ]]; then
+        u=$(logname 2>/dev/null || true)
+    fi
+    if [[ -z "$u" || "$u" == "root" ]]; then
+        u=$(id -nu 1000 2>/dev/null || true)
+    fi
+    if [[ -z "$u" || "$u" == "root" ]]; then
+        echo ""
+    else
+        echo "$u"
+    fi
+}
+
+# Executa o protonvpn no contexto do usuário real (com suporte a D-Bus, HOME e chaveiro)
 run_protonvpn() {
-    if [[ $EUID -eq 0 && -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
-        local uid
-        uid=$(id -u "$SUDO_USER" 2>/dev/null || echo "1000")
+    local real_user
+    real_user=$(get_real_user)
+
+    if [[ $EUID -eq 0 && -n "$real_user" && "$real_user" != "root" ]]; then
+        local uid uhome
+        uid=$(id -u "$real_user" 2>/dev/null || echo "1000")
+        uhome=$(getent passwd "$real_user" 2>/dev/null | cut -d: -f6)
+        uhome="${uhome:-/home/$real_user}"
+
+        local -a env_args=(
+            "-u" "$real_user"
+            "-H"
+            "HOME=$uhome"
+            "USER=$real_user"
+            "LOGNAME=$real_user"
+            "XDG_CONFIG_HOME=${uhome}/.config"
+            "XDG_CACHE_HOME=${uhome}/.cache"
+            "XDG_DATA_HOME=${uhome}/.local/share"
+            "XDG_STATE_HOME=${uhome}/.local/state"
+        )
+
         if [[ -n "$uid" && -S "/run/user/${uid}/bus" ]]; then
-            sudo -u "$SUDO_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${uid}/bus" protonvpn "$@"
-        else
-            sudo -u "$SUDO_USER" protonvpn "$@"
+            env_args+=(
+                "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${uid}/bus"
+                "XDG_RUNTIME_DIR=/run/user/${uid}"
+            )
         fi
+
+        sudo "${env_args[@]}" protonvpn "$@"
     else
         protonvpn "$@"
     fi
@@ -152,10 +189,28 @@ send_notification() {
     local title="$1"
     local msg="$2"
     if command -v notify-send &>/dev/null; then
-        if [[ $EUID -eq 0 && -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
-            local uid
-            uid=$(id -u "$SUDO_USER" 2>/dev/null || echo "1000")
-            sudo -u "$SUDO_USER" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${uid}/bus" notify-send -i network-vpn "$title" "$msg" 2>/dev/null || true
+        local real_user
+        real_user=$(get_real_user)
+        if [[ $EUID -eq 0 && -n "$real_user" && "$real_user" != "root" ]]; then
+            local uid uhome
+            uid=$(id -u "$real_user" 2>/dev/null || echo "1000")
+            uhome=$(getent passwd "$real_user" 2>/dev/null | cut -d: -f6)
+            uhome="${uhome:-/home/$real_user}"
+
+            local -a env_args=(
+                "-u" "$real_user"
+                "-H"
+                "HOME=$uhome"
+                "USER=$real_user"
+                "LOGNAME=$real_user"
+            )
+            if [[ -n "$uid" && -S "/run/user/${uid}/bus" ]]; then
+                env_args+=(
+                    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${uid}/bus"
+                    "XDG_RUNTIME_DIR=/run/user/${uid}"
+                )
+            fi
+            sudo "${env_args[@]}" notify-send -i network-vpn "$title" "$msg" 2>/dev/null || true
         else
             notify-send -i network-vpn "$title" "$msg" 2>/dev/null || true
         fi
@@ -178,15 +233,31 @@ confirm() {
 
 # ==================== VERIFICAÇÃO DE LOGIN ====================
 is_logged_in() {
-    local status_output
-    status_output=$(run_protonvpn status 2>&1)
+    # 1. Se info contém Account ou Username, o usuário está logado
+    local info_output
+    info_output=$(run_protonvpn info 2>&1)
+    if echo "$info_output" | grep -qiE "account:|username:"; then
+        return 0
+    fi
 
-    # Se a saída indicar ausência de conta/login, retorna falso
-    if echo "$status_output" | grep -qiE "no account|not logged|please login|login required|no configuration|not initialized|no user|please sign|sign in"; then
+    # 2. Se a saída de info ou status indicar explicitamente ausência de conta/login
+    if echo "$info_output" | grep -qiE "no account|not logged|please login|login required|please sign|sign in|not signed in"; then
         return 1
     fi
 
-    # Se comando info executou com sucesso
+    local status_output
+    status_output=$(run_protonvpn status 2>&1)
+
+    if echo "$status_output" | grep -qiE "no account|not logged|please login|login required|no configuration|not initialized|no user|please sign|sign in|not signed in"; then
+        return 1
+    fi
+
+    # 3. Se status indicar Connected ou Disconnected
+    if echo "$status_output" | grep -qiE "status:\s*(connected|disconnected)"; then
+        return 0
+    fi
+
+    # 4. Se comando info executou com sucesso (código 0)
     if run_protonvpn info &>/dev/null; then
         return 0
     fi
