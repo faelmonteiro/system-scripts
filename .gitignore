@@ -1,0 +1,39 @@
+# =============================================================================
+# .gitignore - Linux System & Privacy Scripts Toolkit
+# =============================================================================
+
+# Arquivos de backup e restauração
+*.bak
+*.bak.*
+*.harden_bak
+*~
+*.orig
+
+# Arquivos de log e auditoria locais
+*.log
+*.log.*
+
+# Arquivos temporários e de swap
+*.tmp
+*.swp
+*.swo
+*.pid
+*.lock
+
+# Arquivos sensíveis, chaves e credenciais privadas
+.*secret*
+*.key
+*.pem
+*.env
+.webui_secret_key
+
+# Caches e diretórios de ferramentas
+.ruff_cache/
+__pycache__/
+.cache/
+.vscode/
+.idea/
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
