@@ -50,6 +50,12 @@ NM_CONF_DIR="/etc/NetworkManager/conf.d"
 NM_DNS_FILE="/etc/NetworkManager/conf.d/dns-muda-dns.conf"
 LOG_FILE="/var/log/muda-dns.log"
 
+# Perfis de servidores com identificadores válidos do dnscrypt-proxy
+# ESCOLA: servidores DoH estritamente na porta 443 (stealth para contornar bloqueios de portas em firewalls)
+SERVERS_ESCOLA='["quad9-doh-ip4-port443-filter-pri", "cloudflare-security", "adguard-dns-doh", "nextdns"]'
+# CASA: servidores com filtro de segurança, bloqueio de ameaças e suporte completo a DNSSEC
+SERVERS_CASA='["quad9-dnscrypt-ip4-filter-pri", "cloudflare-security", "adguard-dns-doh", "nextdns"]'
+
 # Verifica se o arquivo de configuração existe
 if [ ! -f "$TOML_FILE" ]; then
     echo "❌ Arquivo de configuração não encontrado: $TOML_FILE"
@@ -240,10 +246,10 @@ show_status() {
 
     servers=$(grep -E '^[[:space:]]*server_names' "$TOML_FILE" 2>/dev/null | sed -E 's/^[[:space:]]*server_names[[:space:]]*=[[:space:]]*//')
 
-    if grep -E '^[[:space:]]*server_names' "$TOML_FILE" 2>/dev/null | grep -q 'cloudflare-security-443'; then
+    if grep -E '^[[:space:]]*server_names' "$TOML_FILE" 2>/dev/null | grep -q 'quad9-doh-ip4-port443-filter-pri'; then
         mode_icon="🏫"
         mode_name="ESCOLA (stealth na porta 443)"
-    elif grep -E '^[[:space:]]*server_names' "$TOML_FILE" 2>/dev/null | grep -q 'adguard-dns-filter'; then
+    elif grep -E '^[[:space:]]*server_names' "$TOML_FILE" 2>/dev/null | grep -q 'quad9-dnscrypt-ip4-filter-pri'; then
         mode_icon="🏠"
         mode_name="CASA (filtro padrão)"
     else
@@ -332,10 +338,10 @@ show_status() {
 }
 
 # Modo CLI (sem menu interativo)
-if [ -n "$1" ]; then
-    case "$1" in
+if [ -n "${1:-}" ]; then
+    case "${1:-}" in
         escola|1)
-            if apply_servers '["quad9-dnscrypt-ip4-filter-pri", "cloudflare-security-443", "nextdns-filter"]' && setup_local_dns; then
+            if apply_servers "$SERVERS_ESCOLA" && setup_local_dns; then
                 log "✅ Modo ESCOLA ativado (CLI)"
                 echo "${GREEN}✅ Modo ESCOLA ativado (stealth, porta 443)!${RESET}"
                 verify_dns
@@ -345,7 +351,7 @@ if [ -n "$1" ]; then
             fi
             ;;
         casa|2)
-            if apply_servers '["quad9-dnscrypt-ip4-filter-alt", "cloudflare-security", "adguard-dns-filter", "nextdns-filter"]' && setup_local_dns; then
+            if apply_servers "$SERVERS_CASA" && setup_local_dns; then
                 log "✅ Modo CASA ativado (CLI)"
                 echo "${GREEN}✅ Modo CASA ativado (filtro + DNSSEC + criptografia)!${RESET}"
                 verify_dns
@@ -354,7 +360,7 @@ if [ -n "$1" ]; then
                 echo "${RED}❌ Não foi possível aplicar os servidores do Modo CASA.${RESET}"
             fi
             ;;
-        restaurar|restore|3)
+        restaurar|restore|normal|3)
             restore_dns
             log "♻️ DNS restaurado para padrão (CLI)"
             echo "${GREEN}✅ Configurações restauradas.${RESET}"
@@ -363,7 +369,7 @@ if [ -n "$1" ]; then
             show_status
             ;;
         *)
-            echo "Uso: $0 [escola|casa|restaurar|status]"
+            echo "Uso: $0 [escola|casa|restaurar|normal|status]"
             exit 1
             ;;
     esac
@@ -376,9 +382,9 @@ while true; do
 
     # Detecta modo atual para mostrar no menu
     current_mode="${YELLOW}❓ Desconhecido${RESET}"
-    if grep -E '^[[:space:]]*server_names' "$TOML_FILE" 2>/dev/null | grep -q 'cloudflare-security-443'; then
+    if grep -E '^[[:space:]]*server_names' "$TOML_FILE" 2>/dev/null | grep -q 'quad9-doh-ip4-port443-filter-pri'; then
         current_mode="${GREEN}🏫 ESCOLA${RESET}"
-    elif grep -E '^[[:space:]]*server_names' "$TOML_FILE" 2>/dev/null | grep -q 'adguard-dns-filter'; then
+    elif grep -E '^[[:space:]]*server_names' "$TOML_FILE" 2>/dev/null | grep -q 'quad9-dnscrypt-ip4-filter-pri'; then
         current_mode="${GREEN}🏠 CASA${RESET}"
     fi
 
@@ -398,7 +404,7 @@ while true; do
     case "$opcao" in
         1)
             # Servidores stealth, porta 443, para evitar bloqueio na escola
-            if apply_servers '["quad9-dnscrypt-ip4-filter-pri", "cloudflare-security-443", "nextdns-filter"]' && setup_local_dns; then
+            if apply_servers "$SERVERS_ESCOLA" && setup_local_dns; then
                 log "✅ Modo ESCOLA ativado"
                 echo "${GREEN}✅ Modo ESCOLA ativado (stealth, porta 443)!${RESET}"
                 verify_dns
@@ -411,7 +417,7 @@ while true; do
 
         2)
             # Servidores normais com filtro para casa
-            if apply_servers '["quad9-dnscrypt-ip4-filter-alt", "cloudflare-security", "adguard-dns-filter", "nextdns-filter"]' && setup_local_dns; then
+            if apply_servers "$SERVERS_CASA" && setup_local_dns; then
                 log "✅ Modo CASA ativado"
                 echo "${GREEN}✅ Modo CASA ativado (filtro + DNSSEC + criptografia)!${RESET}"
                 verify_dns
