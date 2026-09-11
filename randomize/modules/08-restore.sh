@@ -52,7 +52,7 @@ else
 warn "Falha ao escrever /etc/hostname"
 restore_errors=$((restore_errors + 1))
 fi
-if [[ -f /etc/hosts ]]; then
+if [[ ! -s "$STATE_DIR/original_hosts" && -f /etc/hosts ]]; then
 if ! run sed -i -E "s/^([[:space:]]*127\.0\.1\.1[[:space:]]+)[^[:space:]]+/\1$orig_host/" /etc/hosts 2>/dev/null; then
 warn "Falha ao restaurar /etc/hosts"
 restore_errors=$((restore_errors + 1))
@@ -302,7 +302,11 @@ if [[ -s "$STATE_DIR/original_machine_id" ]]; then
 if run cp "$STATE_DIR/original_machine_id" /etc/machine-id 2>/dev/null; then
 chmod 444 /etc/machine-id 2>/dev/null || true
 if [[ -f /var/lib/dbus/machine-id && ! -L /var/lib/dbus/machine-id ]]; then
+if [[ -s "$STATE_DIR/original_dbus_machine_id" ]]; then
+run cp "$STATE_DIR/original_dbus_machine_id" /var/lib/dbus/machine-id 2>/dev/null || true
+else
 run cp "$STATE_DIR/original_machine_id" /var/lib/dbus/machine-id 2>/dev/null || true
+fi
 chmod 444 /var/lib/dbus/machine-id 2>/dev/null || true
 fi
 ok "Machine-ID restaurado"
@@ -351,33 +355,33 @@ fi
 
 # Portas
 if [[ -s "$STATE_DIR/original_port_range" ]]; then
-if cat "$STATE_DIR/original_port_range" | write_file /proc/sys/net/ipv4/ip_local_port_range; then
-ok "Portas efêmeras restauradas"
-else
-warn "Falha ao restaurar portas efêmeras"
-restore_errors=$((restore_errors + 1))
-fi
-restored=1
+    if write_file /proc/sys/net/ipv4/ip_local_port_range < "$STATE_DIR/original_port_range"; then
+        ok "Portas efêmeras restauradas"
+    else
+        warn "Falha ao restaurar portas efêmeras"
+        restore_errors=$((restore_errors + 1))
+    fi
+    restored=1
 fi
 
 # TTL
 if [[ -s "$STATE_DIR/original_ttl" ]]; then
-if cat "$STATE_DIR/original_ttl" | write_file /proc/sys/net/ipv4/ip_default_ttl; then
-ok "TTL restaurado"
-else
-warn "Falha ao restaurar TTL"
-restore_errors=$((restore_errors + 1))
-fi
-restored=1
+    if write_file /proc/sys/net/ipv4/ip_default_ttl < "$STATE_DIR/original_ttl"; then
+        ok "TTL restaurado"
+    else
+        warn "Falha ao restaurar TTL"
+        restore_errors=$((restore_errors + 1))
+    fi
+    restored=1
 fi
 if [[ -s "$STATE_DIR/original_hop_limit" ]]; then
-if cat "$STATE_DIR/original_hop_limit" | write_file /proc/sys/net/ipv6/conf/all/hop_limit; then
-ok "Hop limit restaurado"
-else
-warn "Falha ao restaurar hop_limit"
-restore_errors=$((restore_errors + 1))
-fi
-restored=1
+    if write_file /proc/sys/net/ipv6/conf/all/hop_limit < "$STATE_DIR/original_hop_limit"; then
+        ok "Hop limit restaurado"
+    else
+        warn "Falha ao restaurar hop_limit"
+        restore_errors=$((restore_errors + 1))
+    fi
+    restored=1
 fi
 
 # IPv6

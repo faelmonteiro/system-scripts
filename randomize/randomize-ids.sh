@@ -3,6 +3,8 @@
 # randomize-ids.sh (Versão Modularizada)
 # Ferramenta de randomização de identificadores do sistema Linux.
 # =============================================================================
+# Nota: 'set -e' é omitido intencionalmente pois os módulos tratam erros manualmente
+set -u -o pipefail
 
 SCRIPT_SOURCE="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"

@@ -112,10 +112,10 @@ fake_val="$(random_string 12)"
 ;;
 esac
 printf '%s\n' "$fake_val" | write_file "$FAKE_DMI_DIR/$dmi_file"
-if [[ "$dmi_file" == "product_uuid" ]]; then
-run chmod 600 "$FAKE_DMI_DIR/$dmi_file" 2>/dev/null || true
+if [[ "$dmi_file" == *"_serial" || "$dmi_file" == "product_uuid" ]]; then
+run chmod 400 "$FAKE_DMI_DIR/$dmi_file" 2>/dev/null || true
 else
-run chmod 644 "$FAKE_DMI_DIR/$dmi_file" 2>/dev/null || true
+run chmod 444 "$FAKE_DMI_DIR/$dmi_file" 2>/dev/null || true
 fi
 if [[ $DRY_RUN -eq 1 ]]; then
 printf '[DRY-RUN] %s: %s -> %s\n' "$dmi_file" "$real_val" "$fake_val"
@@ -151,6 +151,8 @@ fake_total=${PERSONA_RAM:-${ram_options[$idx]}}
 ratio=$(LC_ALL=C awk -v fake="$fake_total" -v real="$real_total" 'BEGIN {printf "%.6f", fake/real}')
 echo "  RAM real: $((real_total / 1024)) MB"
 echo "  RAM falsa: $((fake_total / 1024)) MB"
+warn "ATENÇÃO: MemFree/MemAvailable ficarão estáticos enquanto o spoof estiver ativo."
+warn "Ferramentas como htop/free mostrarão valores de consumo de RAM congelados."
 if [[ $DRY_RUN -eq 1 ]]; then
 printf '[DRY-RUN] bind mount /proc/meminfo\n'
 return 0
@@ -457,12 +459,7 @@ fake_res="${res_list[$idx]}"
 fake_w="${fake_res%x*}"
 fake_h="${fake_res#*x}"
 echo "  Resolução falsa: $fake_res"
-local real_backup="${real_xrandr}.real"
-if [[ ! -e "$real_backup" ]]; then
-run cp -a "$real_xrandr" "$real_backup"
-backup_original "xrandr_real_path" "$real_backup"
-fi
-local real_bin="$real_backup"
+local real_bin="$real_xrandr"
 local wrapper_content
 wrapper_content=$(cat <<EOF
 #!/bin/bash

@@ -64,6 +64,8 @@ for arg in "$@"; do
             ;;
         --version|-V)
             echo -e "${BOLD}toggle-ecores-generic${NC} v${VERSION}"
+            local_cpu=$(grep -m1 "model name" /proc/cpuinfo 2>/dev/null | cut -d':' -f2 | xargs || true)
+            [[ -n "$local_cpu" ]] && echo -e "${CYAN}CPU:${NC}     $local_cpu"
             echo -e "${CYAN}Kernel:${NC}  $(uname -r)"
             exit 0
             ;;
@@ -472,24 +474,6 @@ case "${1:-}" in
         ;;
     --status|status)
         show_status
-        exit 0
-        ;;
-    --version|-V)
-        echo -e "${BOLD}toggle-ecores-generic${NC} v${VERSION}"
-        echo -e "${CYAN}CPU:${NC}     ${CPU_MODEL}"
-        echo -e "${CYAN}Kernel:${NC}  $(uname -r)"
-        echo -e "${CYAN}P-cores:${NC} ${P_COUNT}   ${CYAN}E-cores:${NC} ${E_COUNT}   ${CYAN}Total:${NC} ${TOTAL_CPUS}"
-        count_ecores_state
-        echo -e "${CYAN}Estado:${NC}  ${GREEN}${E_ONLINE} online${NC} / ${RED}${E_OFFLINE} offline${NC}"
-        if is_persist_active; then
-            echo -e "${CYAN}Persist:${NC} ${GREEN}Ativa${NC} (E-cores OFF no boot)"
-        else
-            echo -e "${CYAN}Persist:${NC} ${YELLOW}Inativa${NC}"
-        fi
-        exit 0
-        ;;
-    --help|-h)
-        show_usage
         exit 0
         ;;
     "")

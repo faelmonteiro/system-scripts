@@ -15,9 +15,6 @@ for iface in /sys/class/net/*/device; do
 iname=$(echo "$iface" | cut -d'/' -f5)
 should_process_iface "$iname" || continue
 found=1
-current_mac=$(cat "/sys/class/net/$iname/address" 2>/dev/null)
-backup_original "mac_$iname" "$current_mac" || { warn "[$iname] Falha no backup do MAC original. Pulando."; continue; }
-new_mac=$(generate_random_mac) || { warn "[$iname] Falha na geração do MAC. Pulando."; continue; }
 if [[ " $default_ifaces " == *" $iname "* ]]; then
 if [[ "${RANDOMIZE_ALLOW_DEFAULT_IFACE:-0}" != "1" ]]; then
 warn "Pulando interface default [$iname]. Use RANDOMIZE_ALLOW_DEFAULT_IFACE=1 para permitir."
@@ -26,6 +23,9 @@ else
 warn "[$iname] é interface default. Você pode perder conectividade."
 fi
 fi
+current_mac=$(cat "/sys/class/net/$iname/address" 2>/dev/null)
+backup_original "mac_$iname" "$current_mac" || { warn "[$iname] Falha no backup do MAC original. Pulando."; continue; }
+new_mac=$(generate_random_mac) || { warn "[$iname] Falha na geração do MAC. Pulando."; continue; }
 if [[ $DRY_RUN -eq 1 ]]; then
 printf '[DRY-RUN] [%s] %s -> %s\n' "$iname" "$current_mac" "$new_mac"
 continue
@@ -231,41 +231,41 @@ log_change "TIMEZONE|$current_tz -> $chosen"
 # ==================== SPOOF: PORTAS / TTL / IPv6 ====================
 randomize_ports() {
 info "Randomizando portas efêmeras"
-local current_range min_port max_port
-current_range=$(cat /proc/sys/net/ipv4/ip_local_port_range)
-backup_original "port_range" "$current_range"
-min_port=$(rand_range 20000 39999)
-max_port=$(rand_range 50000 64999)
-echo "  Atual: $current_range"
-echo "  Novo: $min_port  $max_port"
-printf '%s %s\n' "$min_port" "$max_port" | write_file /proc/sys/net/ipv4/ip_local_port_range
-ok "Portas efêmeras alteradas"
-log_change "PORTS|$current_range -> $min_port $max_port"
+    local current_range min_port max_port
+    current_range=$(</proc/sys/net/ipv4/ip_local_port_range)
+    backup_original "port_range" "$current_range"
+    min_port=$(rand_range 20000 39999)
+    max_port=$(rand_range 50000 64999)
+    echo "  Atual: $current_range"
+    echo "  Novo: $min_port  $max_port"
+    printf '%s %s\n' "$min_port" "$max_port" | write_file /proc/sys/net/ipv4/ip_local_port_range
+    ok "Portas efêmeras alteradas"
+    log_change "PORTS|$current_range -> $min_port $max_port"
 }
 
 randomize_ttl() {
-info "Randomizando TTL"
-local ttl_list=(64 128 255 60 100 130)
-local current_ttl new_ttl idx
-local available=()
-local t
-current_ttl=$(cat /proc/sys/net/ipv4/ip_default_ttl)
-backup_original "ttl" "$current_ttl"
-for t in "${ttl_list[@]}"; do
-[[ "$t" != "$current_ttl" ]] && available+=("$t")
-done
-if (( ${#available[@]} == 0 )); then
-available=("${ttl_list[@]}")
-fi
-idx=$(( $(rand_u32) % ${#available[@]} ))
-new_ttl="${available[$idx]}"
-echo "  Atual: $current_ttl"
-echo "  Novo: $new_ttl"
-write_str "/proc/sys/net/ipv4/ip_default_ttl" "$new_ttl"
-if [[ -f /proc/sys/net/ipv6/conf/all/hop_limit ]]; then
-backup_original "hop_limit" "$(cat /proc/sys/net/ipv6/conf/all/hop_limit)"
-write_str "/proc/sys/net/ipv6/conf/all/hop_limit" "$new_ttl"
-fi
+    info "Randomizando TTL"
+    local ttl_list=(64 128 255 60 100 130)
+    local current_ttl new_ttl idx
+    local available=()
+    local t
+    current_ttl=$(</proc/sys/net/ipv4/ip_default_ttl)
+    backup_original "ttl" "$current_ttl"
+    for t in "${ttl_list[@]}"; do
+        [[ "$t" != "$current_ttl" ]] && available+=("$t")
+    done
+    if (( ${#available[@]} == 0 )); then
+        available=("${ttl_list[@]}")
+    fi
+    idx=$(( $(rand_u32) % ${#available[@]} ))
+    new_ttl="${available[$idx]}"
+    echo "  Atual: $current_ttl"
+    echo "  Novo: $new_ttl"
+    write_str "/proc/sys/net/ipv4/ip_default_ttl" "$new_ttl"
+    if [[ -f /proc/sys/net/ipv6/conf/all/hop_limit ]]; then
+        backup_original "hop_limit" "$(</proc/sys/net/ipv6/conf/all/hop_limit)"
+        write_str "/proc/sys/net/ipv6/conf/all/hop_limit" "$new_ttl"
+    fi
 ok "TTL alterado"
 log_change "TTL|$current_ttl -> $new_ttl"
 }

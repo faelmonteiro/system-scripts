@@ -61,8 +61,12 @@ acquire_lock() {
 backup_file() {
     local file=$1
     if [[ -f "$file" && ! -f "${file}.harden_bak" ]]; then
-        cp -a "$file" "${file}.harden_bak"
-        echo -e "   ${CYAN}💾 Backup criado: ${file}.harden_bak${RESET}"
+        if cp -a "$file" "${file}.harden_bak"; then
+            echo -e "   ${CYAN}💾 Backup criado: ${file}.harden_bak${RESET}"
+        else
+            echo -e "   ${RED}❌ Falha ao criar backup de $file${RESET}"
+            return 1
+        fi
     fi
 }
 
@@ -81,7 +85,7 @@ apply_bootloader_params() {
     local bl=$(detect_bootloader)
 
     if [[ "$bl" == "grub" ]]; then
-        backup_file "/etc/default/grub"
+        backup_file "/etc/default/grub" || return 1
         local current_line
         current_line=$(grep "^GRUB_CMDLINE_LINUX_DEFAULT=" /etc/default/grub || echo "")
         local new_params=""
@@ -91,14 +95,22 @@ apply_bootloader_params() {
             fi
         done
         if [[ -n "$new_params" ]]; then
-            sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"/GRUB_CMDLINE_LINUX_DEFAULT=\"${new_params}/" /etc/default/grub
-
-            if command -v update-grub &>/dev/null; then
-                update-grub >/dev/null 2>&1
-            elif command -v grub-mkconfig &>/dev/null; then
-                grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+            if ! sed -i "s/^GRUB_CMDLINE_LINUX_DEFAULT=\"/GRUB_CMDLINE_LINUX_DEFAULT=\"${new_params}/" /etc/default/grub; then
+                echo -e "   ${RED}❌ Falha ao modificar /etc/default/grub${RESET}"
+                return 1
             fi
-            echo -e "   ${GREEN}✅ GRUB atualizado.${RESET}"
+
+            local grub_ok=0
+            if command -v update-grub &>/dev/null; then
+                update-grub >/dev/null 2>&1 && grub_ok=1
+            elif command -v grub-mkconfig &>/dev/null; then
+                grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 && grub_ok=1
+            fi
+            if [[ $grub_ok -eq 1 ]]; then
+                echo -e "   ${GREEN}✅ GRUB atualizado.${RESET}"
+            else
+                echo -e "   ${RED}❌ Falha ao atualizar configuração do GRUB.${RESET}"
+            fi
         else
             echo -e "   ${YELLOW}⚠️ Parâmetros já presentes no GRUB.${RESET}"
         fi
@@ -210,11 +222,21 @@ show_status() {
     fi
 
     # 6. AppArmor
-    if systemctl is-enabled apparmor &>/dev/null; then
-        echo -e "${GREEN}✅ AppArmor:${RESET} ${BOLD}ATIVO${RESET}"
+    if command -v aa-status &>/dev/null && aa-status --enabled 2>/dev/null; then
+        echo -e "${GREEN}✅ AppArmor:${RESET} ${BOLD}ATIVO (Enforcing)${RESET}"
         echo -e "   ${WHITE}O que faz:${RESET} Confina programas vulneráveis, limitando o acesso a arquivos e rede.\n"
+    elif [[ -d /sys/kernel/security/apparmor ]]; then
+        echo -e "${YELLOW}⚠️ AppArmor:${RESET} ${BOLD}SUPORTADO MAS INATIVO${RESET}"
+        echo -e "   ${WHITE}O que faz:${RESET} Controle de Acesso Obrigatório (MAC) para conter exploits.\n"
+    elif systemctl list-unit-files 2>/dev/null | grep -q "apparmor.service"; then
+        if systemctl is-active --quiet apparmor 2>/dev/null; then
+            echo -e "${GREEN}✅ AppArmor:${RESET} ${BOLD}ATIVO${RESET}"
+        else
+            echo -e "${YELLOW}⚠️ AppArmor:${RESET} ${BOLD}INATIVO (Serviço parado)${RESET}"
+        fi
+        echo -e "   ${WHITE}O que faz:${RESET} Controle de Acesso Obrigatório (MAC) para conter exploits.\n"
     else
-        echo -e "${RED}❌ AppArmor:${RESET} ${BOLD}INATIVO${RESET}"
+        echo -e "${CYAN}ℹ️ AppArmor:${RESET} ${BOLD}NÃO INSTALADO${RESET}"
         echo -e "   ${WHITE}O que faz:${RESET} Controle de Acesso Obrigatório (MAC) para conter exploits.\n"
     fi
 
@@ -615,20 +637,6 @@ if [[ $# -gt 0 ]]; then
             --yes|-y)
                 AUTO_YES=true
                 shift
-                ;;
-            --help|-h)
-                echo -e "${BOLD}Linux Hardening Manager v${VERSION}${RESET}"
-                echo "Uso: sudo $0 [OPÇÕES]"
-                echo
-                echo "Opções:"
-                echo "  --level, -l <1|2|3>    Aplica o nível de hardening especificado"
-                echo "  --status, -s           Exibe o status atual das proteções"
-                echo "  --restore, -r          Restaura as configurações de fábrica do sistema"
-                echo "  --yes, -y              Confirma automaticamente sem prompts interativos"
-                echo "  --help, -h             Exibe esta ajuda"
-                echo
-                echo "Sem opções, inicia o menu interativo."
-                exit 0
                 ;;
             *)
                 echo -e "${RED}❌ Opção desconhecida: $1${RESET}"

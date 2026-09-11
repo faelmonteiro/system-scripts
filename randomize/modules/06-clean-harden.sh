@@ -12,8 +12,13 @@ if [[ -z "$opt" ]]; then
 echo "Uso: clean_traces --history|--cache|--tmp|--clipboard|--logs|--browser-cache|--all"
 return 0
 fi
-local real_home="/home/${SUDO_USER:-${USER:-}}"
-local h logfile
+    local target_user="${SUDO_USER:-${USER:-}}"
+    local real_home=""
+    if [[ -n "$target_user" ]]; then
+        real_home=$(getent passwd "$target_user" 2>/dev/null | cut -d: -f6)
+    fi
+    real_home="${real_home:-/home/$target_user}"
+    local h logfile
 if [[ "$opt" == "--all" || "$opt" == "--history" ]]; then
 if [[ $DRY_RUN -eq 1 ]]; then
 printf '[DRY-RUN] history -c\n'
@@ -140,9 +145,18 @@ ok "Hardening aplicado: $HARDEN_SYSCTL"
 }
 
 harden_undo() {
-info "Removendo hardening"
-run rm -f "$HARDEN_SYSCTL"
-run sysctl --system 2>/dev/null || true
-ok "Hardening removido"
+    info "Removendo hardening"
+    run rm -f "$HARDEN_SYSCTL"
+    # Reverter valores em memória para os padrões típicos do kernel
+    run sysctl -w kernel.dmesg_restrict=0 2>/dev/null || true
+    run sysctl -w kernel.kptr_restrict=0 2>/dev/null || true
+    run sysctl -w kernel.yama.ptrace_scope=0 2>/dev/null || true
+    run sysctl -w net.ipv4.tcp_timestamps=1 2>/dev/null || true
+    run sysctl -w net.ipv4.conf.all.accept_redirects=1 2>/dev/null || true
+    run sysctl -w net.ipv6.conf.all.accept_redirects=1 2>/dev/null || true
+    run sysctl -w net.ipv4.conf.all.send_redirects=1 2>/dev/null || true
+    run sysctl --system 2>/dev/null || true
+    ok "Hardening removido"
+    warn "Parâmetros estritos (ex: unprivileged_bpf_disabled) exigem reboot para reversão completa pelo kernel."
 }
 

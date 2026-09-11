@@ -247,8 +247,9 @@ confirm() {
 # ==================== VERIFICAÇÃO DE LOGIN ====================
 is_logged_in() {
     # 1. Se info contém Account ou Username, o usuário está logado
-    local info_output
+    local info_output info_rc
     info_output=$(run_protonvpn info 2>&1)
+    info_rc=$?
     if echo "$info_output" | grep -qiE "account:|username:"; then
         return 0
     fi
@@ -271,7 +272,7 @@ is_logged_in() {
     fi
 
     # 4. Se comando info executou com sucesso (código 0)
-    if run_protonvpn info &>/dev/null; then
+    if [[ $info_rc -eq 0 ]]; then
         return 0
     fi
 
@@ -584,12 +585,12 @@ start_rotator() {
 
     (
         exec 8>&- 2>/dev/null || true
+        cur_pid=""
         while true; do
             sleep "$ROTATION_INTERVAL"
             if [[ ! -f "$ROTATOR_PID_FILE" ]]; then
                 break
             fi
-            local cur_pid
             cur_pid=$(cat "$ROTATOR_PID_FILE" 2>/dev/null || echo "")
             if [[ -n "$cur_pid" && "$cur_pid" != "$BASHPID" ]]; then
                 break
@@ -605,6 +606,7 @@ start_rotator() {
     ) &>/dev/null &
 
     local pid=$!
+    disown "$pid" 2>/dev/null || true
     echo "$pid" > "$ROTATOR_PID_FILE"
     chmod 644 "$ROTATOR_PID_FILE" 2>/dev/null || true
     ok "Rotação automática ativa em segundo plano (PID: $pid) a cada $(( ROTATION_INTERVAL / 60 )) min ${ICON_ROTATE}"

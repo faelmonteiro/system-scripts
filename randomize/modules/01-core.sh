@@ -68,13 +68,25 @@ return 1
 esac
 }
 
+declare -a IFACES_UP_AT_START=()
+init_ifaces_state() {
+    IFACES_UP_AT_START=()
+    local iface iname
+    for iface in /sys/class/net/*/device; do
+        [[ -e "$iface" ]] || continue
+        iname=$(echo "$iface" | cut -d'/' -f5)
+        if [[ "$(cat "/sys/class/net/$iname/operstate" 2>/dev/null)" == "up" ]] || ip link show "$iname" 2>/dev/null | grep -q "state UP"; then
+            IFACES_UP_AT_START+=("$iname")
+        fi
+    done
+}
+init_ifaces_state
+
 cleanup_on_exit() {
-[[ $DRY_RUN -eq 1 ]] && return 0
-local iface iname
-for iface in /sys/class/net/*/device; do
-[[ -e "$iface" ]] || continue
-iname=$(echo "$iface" | cut -d'/' -f5)
-ip link set dev "$iname" up 2>/dev/null || true
-done
+    [[ $DRY_RUN -eq 1 ]] && return 0
+    local iname
+    for iname in "${IFACES_UP_AT_START[@]}"; do
+        ip link set dev "$iname" up 2>/dev/null || true
+    done
 }
 

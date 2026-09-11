@@ -221,10 +221,33 @@ restore_dns() {
     # Restaura backup com segurança (sem deletar resolv.conf antes da cópia)
     if [ -e "$BACKUP_FILE" ]; then
         cp -a "$BACKUP_FILE" "$RESOLV_FILE" 2>/dev/null && rm -f "$BACKUP_FILE" 2>/dev/null
+        echo "${GREEN}✅ Backup anterior de /etc/resolv.conf restaurado.${RESET}"
     else
-        # Se não houver backup, tenta voltar para o padrão systemd-resolved
-        ln -sf /run/systemd/resolve/stub-resolv.conf "$RESOLV_FILE" 2>/dev/null || \
-        ln -sf /run/systemd/resolve/resolv.conf "$RESOLV_FILE" 2>/dev/null
+        # Se não houver backup, tenta voltar para o padrão systemd-resolved se existir
+        if [ -e /run/systemd/resolve/stub-resolv.conf ]; then
+            ln -sf /run/systemd/resolve/stub-resolv.conf "$RESOLV_FILE" 2>/dev/null
+            echo "${GREEN}✅ Vinculado a /run/systemd/resolve/stub-resolv.conf.${RESET}"
+        elif [ -e /run/systemd/resolve/resolv.conf ]; then
+            ln -sf /run/systemd/resolve/resolv.conf "$RESOLV_FILE" 2>/dev/null
+            echo "${GREEN}✅ Vinculado a /run/systemd/resolve/resolv.conf.${RESET}"
+        else
+            rm -f "$RESOLV_FILE" 2>/dev/null
+            cat <<EOF > "$RESOLV_FILE"
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+EOF
+            echo "${YELLOW}⚠️ Destino do systemd-resolved não encontrado. Fallback configurado (1.1.1.1 / 8.8.8.8).${RESET}"
+        fi
+    fi
+
+    # Garantir que resolv.conf não ficou como link quebrado
+    if [ ! -e "$RESOLV_FILE" ] || { [ -L "$RESOLV_FILE" ] && [ ! -e "$(readlink -f "$RESOLV_FILE")" ]; }; then
+        echo "${RED}❌ /etc/resolv.conf apontava para alvo inexistente! Configurando fallback de segurança.${RESET}"
+        rm -f "$RESOLV_FILE" 2>/dev/null
+        cat <<EOF > "$RESOLV_FILE"
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+EOF
     fi
 
     # Reativa serviços de rede padrão
